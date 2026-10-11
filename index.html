@@ -2991,6 +2991,7 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         var ed = s.edition || 'homebrew';
         var badgeColor = ed === '2014' ? '#8b4513' : ed === '2024' ? '#1a5276' : '#1a6b2a';
         var badgeLabel = ed === '2014' ? '2014' : ed === '2024' ? '2024' : 'HB';
+        var editionText = ed === '2014' ? 'Ed. 2014' : ed === '2024' ? 'Ed. 2024' : 'Homebrew';
         var t = frontTheme;
         var spineColor = schoolColor(s.school)[0];
 
@@ -3008,7 +3009,7 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         cardInner += '</div>';
         if (s.nameEng) cardInner += '<div style="font-style:italic;font-size:6pt;opacity:.65;margin-bottom:3px;">' + escapeHtml(s.nameEng) + '</div>';
         cardInner += '<div style="font-size:6pt;line-height:1.5;margin-bottom:4px;">';
-        cardInner += '<b>' + escapeHtml(lvl) + ' ' + escapeHtml(s.school) + '</b>' + (s.ritual ? ' ®' : '') + (s.conc ? ' ©' : '') + '<br>';
+        cardInner += '<b>' + escapeHtml(lvl) + ' ' + escapeHtml(s.school) + '</b>' + (s.ritual ? ' ®' : '') + (s.conc ? ' ©' : '') + ' &middot; ' + editionText + '<br>';
         cardInner += '<b>Lancio:</b> ' + escapeHtml(s.cast || '—') + '<br>';
         cardInner += '<b>Gittata:</b> ' + escapeHtml(s.range || '—') + ' &nbsp; <b>Durata:</b> ' + escapeHtml(dur) + '<br>';
         cardInner += '<b>Comp.:</b> ' + escapeHtml(compsStr);
