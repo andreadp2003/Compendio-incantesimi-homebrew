@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 200 200"><g stroke="#1e2327" stroke-width="3" stroke-linejoin="round">
+<rect x="52" y="33" width="96" height="134" rx="10" fill="#6a4bc0" transform="rotate(-14 100 100)"/>
+<rect x="52" y="33" width="96" height="134" rx="10" fill="#d4a24c" transform="rotate(14 100 100)"/>
+<rect x="52" y="33" width="96" height="134" rx="10" fill="#efe4cb"/>
+</g>
+<rect x="58" y="39" width="84" height="122" rx="6" fill="none" stroke="#b8862f" stroke-width="1.5"/>
+<rect x="80" y="46" width="40" height="5" rx="2.5" fill="#1e2327"/>
+<circle cx="100" cy="94" r="36" fill="none" stroke="#1e2327" stroke-width="2"/>
+<g fill="#6a4bc0"><circle cx="100" cy="58" r="3.5"/><circle cx="125.46" cy="68.54" r="3.5"/><circle cx="136" cy="94" r="3.5"/><circle cx="125.46" cy="119.46" r="3.5"/><circle cx="100" cy="130" r="3.5"/><circle cx="74.54" cy="119.46" r="3.5"/><circle cx="64" cy="94" r="3.5"/><circle cx="74.54" cy="68.54" r="3.5"/></g>
+<g transform="translate(100 94)"><path d="M0 -26 L3.44 -8.32 L18.39 -18.39 L8.32 -3.44 L26 0 L8.32 3.44 L18.39 18.39 L3.44 8.32 L0 26 L-3.44 8.32 L-18.39 18.39 L-8.32 3.44 L-26 0 L-8.32 -3.44 L-18.39 -18.39 L-3.44 -8.32 Z" fill="#1e2327"/><circle r="4" fill="#d4a24c"/></g>
+<rect x="72" y="140" width="56" height="3.5" rx="1.75" fill="#1e2327" opacity="0.55"/>
+<rect x="80" y="148" width="40" height="3.5" rx="1.75" fill="#1e2327" opacity="0.55"/>
+<path d="M172 16 L174.2 23.8 L182 26 L174.2 28.2 L172 36 L169.8 28.2 L162 26 L169.8 23.8 Z" fill="#efe4cb"/></svg>

@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/logo-orizzontale-scuro.png">
+    <img alt="Compendio Arcano" src="assets/logo/logo-orizzontale-chiaro.png" width="520">
+  </picture>
+</p>
+
 # Compendio Incantesimi Homebrew
 
 [![Sito live](https://img.shields.io/badge/sito-live-2ea44f)](https://gdr-sys.github.io/Compendio-incantesimi-homebrew/)
