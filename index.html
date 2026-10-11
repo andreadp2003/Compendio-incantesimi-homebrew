@@ -868,6 +868,12 @@ footer.footer-noemi {
       <div class="mode-tab" id="faceTabFront" onclick="switchFace('front')">🂡 Fronte carta</div>
     </div>
 
+    <div style="margin:0 0 16px;">
+      <span class="field-label">Come scrivere l'edizione (vale per fronte e retro)</span>
+      <div class="chip-row" id="editionFormatRow"></div>
+      <p class="field-hint">Sul retro l'edizione si aggiunge tra i campi della tabellina ("Edizione"); sul fronte compare accanto al nome. Gli incantesimi homebrew mostrano "Homebrew" (sul fronte "HB").</p>
+    </div>
+
     <!-- ============ RETRO ============ -->
     <div id="faceBack">
       <div class="designer-layout">
@@ -1037,6 +1043,9 @@ footer.footer-noemi {
             <div><label class="field-label">Testo intestazione</label><input type="color" id="frontHeaderTextInput" oninput="onFrontColorChange()"></div>
           </div>
 
+          <label class="field-label" style="margin-top:14px; display:block;">Edizione sul fronte</label>
+          <div class="chip-row" id="editionNameRow"></div>
+
           <p style="font-family:var(--font-ui); font-size:.74rem; color:var(--ink-muted); margin-top:14px; line-height:1.5;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:3px;"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>Questo stile viene applicato alle carte generate in fase di stampa. La striscia laterale colorata resta legata alla scuola di magia per restare leggibile a colpo d'occhio.
           </p>
@@ -1150,7 +1159,7 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
     // Which stat fields appear on the per-spell card back, and in what order.
     // Defaults match the original fixed 3-row table so existing decks look unchanged
     // until the user opts into showing more (or fewer) fields.
-    const DEFAULT_BACK_FIELDS = { level: true, castType: true, range: true, conc: true, duration: true, school: true, ritual: false, comp: false, mats: false, classes: false, damage: false, damageHigher: false };
+    const DEFAULT_BACK_FIELDS = { level: true, castType: true, range: true, conc: true, duration: true, school: true, edition: false, ritual: false, comp: false, mats: false, classes: false, damage: false, damageHigher: false };
     let backDesign = JSON.parse(localStorage.getItem('grim_card_back')) || { mode: 'pattern', image: null, pattern: DEFAULT_PATTERN, perSpell: false };
     if (!backDesign.pattern) backDesign.pattern = Object.assign({}, DEFAULT_PATTERN);
     if (backDesign.pattern.decoColor === undefined) backDesign.pattern.decoColor = 'light';
@@ -1173,6 +1182,7 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         { key: 'conc', label: 'Concentr.:', get: function (s) { return s.conc ? 'Sì' : 'No'; } },
         { key: 'duration', label: 'Durata:', get: function (s) { return formatDuration(s); } },
         { key: 'school', label: 'Scuola:', get: function (s) { return s.school || '—'; } },
+        { key: 'edition', label: 'Edizione:', get: function (s) { return editionLabelText(s.edition); } },
         { key: 'ritual', label: 'Rituale:', get: function (s) { return s.ritual ? 'Sì' : 'No'; } },
         { key: 'comp', label: 'Comp.:', get: function (s) { var c = []; if (s.comp && s.comp.v) c.push('V'); if (s.comp && s.comp.s) c.push('S'); if (s.comp && s.comp.m) c.push('M'); return c.join(', ') || '—'; } },
         { key: 'mats', label: 'Materiali:', get: function (s) { return (s.comp && s.comp.m && s.mats) ? s.mats : ''; } },
@@ -1199,6 +1209,16 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
     // Front card theme state
     const DEFAULT_FRONT = { bg: '#FFFDFA', text: '#332B21', headerBg: '#3a2a5c', headerText: '#ffffff' };
     let frontTheme = JSON.parse(localStorage.getItem('grim_front_theme')) || Object.assign({}, DEFAULT_FRONT);
+
+    // Edizione sulle carte. Il formato si sceglie una volta sola e vale ovunque la carta
+    // scrive l'edizione (fronte e retro): 'year' = 2014 / 2024, 'ed' = 5 ed. / 5.5 ed.
+    // besideName decide se il fronte mostra l'etichetta accanto al nome (come prima).
+    let cardEdition = Object.assign({ format: 'year', besideName: true }, JSON.parse(localStorage.getItem('grim_card_edition') || 'null') || {});
+    function editionLabelText(ed, short) {
+        if (ed === '2014') return cardEdition.format === 'ed' ? '5 ed.' : '2014';
+        if (ed === '2024') return cardEdition.format === 'ed' ? '5.5 ed.' : '2024';
+        return short ? 'HB' : 'Homebrew';
+    }
 
     const COLOR_PRESETS = [
       { name: 'Violetto Arcano', a: '#6B4FA0', b: '#2C1D4A' },
@@ -2468,6 +2488,7 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         renderFrontPresetRow();
         syncFrontControlsFromState();
         renderFrontPreview();
+        renderEditionControls();
         document.getElementById('perSpellBackToggle').checked = !!backDesign.perSpell;
         document.getElementById('genericBackDesignerWrap').classList.toggle('hidden', !!backDesign.perSpell);
         document.getElementById('perSpellPreviewControls').classList.toggle('hidden', !backDesign.perSpell);
@@ -2488,7 +2509,7 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
     // labels are the compact ones printed on the card itself, e.g. "Comp.:").
     const BACK_FIELD_PICKER_LABELS = {
         level: 'Livello', castType: 'Tipo azione', range: 'Raggio', conc: 'Concentrazione',
-        duration: 'Durata', school: 'Scuola', ritual: 'Rituale', comp: 'Componenti (V/S/M)',
+        duration: 'Durata', school: 'Scuola', edition: 'Edizione', ritual: 'Rituale', comp: 'Componenti (V/S/M)',
         mats: 'Materiali', classes: 'Classi', damage: 'Danno/Cura (base)', damageHigher: 'Danno/Cura (liv. superiori)'
     };
     function renderBackFieldsGrid() {
@@ -2503,6 +2524,27 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         backDesign.backFields[key] = !backDesign.backFields[key];
         renderBackFieldsGrid();
         renderPerSpellBackPreview();
+    }
+
+    // Controlli dell'edizione: formato unico (fronte e retro) e interruttore "accanto al nome".
+    function renderEditionControls() {
+        var fmt = document.getElementById('editionFormatRow');
+        if (fmt) fmt.innerHTML =
+            '<div class="chip' + (cardEdition.format === 'year' ? ' selected' : '') + '" onclick="setEditionFormat(\'year\')">2014 / 2024</div>' +
+            '<div class="chip' + (cardEdition.format === 'ed' ? ' selected' : '') + '" onclick="setEditionFormat(\'ed\')">5 ed. / 5.5 ed.</div>';
+        var nm = document.getElementById('editionNameRow');
+        if (nm) nm.innerHTML = '<div class="chip' + (cardEdition.besideName ? ' selected' : '') + '" onclick="toggleEditionBesideName()">Edizione accanto al nome</div>';
+    }
+    function setEditionFormat(f) {
+        cardEdition.format = f;
+        renderEditionControls();
+        renderFrontPreview();
+        renderPerSpellBackPreview();
+    }
+    function toggleEditionBesideName() {
+        cardEdition.besideName = !cardEdition.besideName;
+        renderEditionControls();
+        renderFrontPreview();
     }
 
     function onPerSpellBackToggle() {
@@ -2853,7 +2895,7 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         frame.innerHTML = `
             <div style="position:absolute; inset:0; padding:10px; font-family:var(--font-body); overflow:hidden; display:flex; flex-direction:column;">
                 <div style="background:${frontTheme.headerBg}; color:${frontTheme.headerText}; margin:-10px -10px 8px; padding:9px 11px; font-family:var(--font-ui); font-weight:700; font-size:.82rem;">
-                    Palla di Fuoco <span style="background:#8b4513; color:#fff; font-size:.6rem; padding:1px 6px; border-radius:8px; margin-left:5px;">2014</span>
+                    Palla di Fuoco ${cardEdition.besideName ? `<span style="background:#8b4513; color:#fff; font-size:.6rem; padding:1px 6px; border-radius:8px; margin-left:5px;">${editionLabelText('2014', true)}</span>` : ''}
                 </div>
                 <div style="font-size:.72rem; line-height:1.6; margin-bottom:6px;"><b>3° Livello Invocazione</b><br><b>Lancio:</b> 1 azione &nbsp; <b>Durata:</b> Istantanea</div>
                 <div style="border-top:1px solid rgba(0,0,0,.15); padding-top:6px; font-size:.76rem; line-height:1.4; flex:1;">Una scia di luce sfreccia dall'indice dell'incantatore fino a un punto scelto, provocando un'esplosione...</div>
@@ -2870,6 +2912,7 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         };
         localStorage.setItem('grim_card_back', JSON.stringify(backDesign));
         localStorage.setItem('grim_front_theme', JSON.stringify(frontTheme));
+        localStorage.setItem('grim_card_edition', JSON.stringify(cardEdition));
         toast('Stile delle carte salvato', '🎨');
         closeBackModal();
     }
@@ -2990,8 +3033,7 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         var dur = formatDuration(s);
         var ed = s.edition || 'homebrew';
         var badgeColor = ed === '2014' ? '#8b4513' : ed === '2024' ? '#1a5276' : '#1a6b2a';
-        var badgeLabel = ed === '2014' ? '2014' : ed === '2024' ? '2024' : 'HB';
-        var editionText = ed === '2014' ? 'Ed. 2014' : ed === '2024' ? 'Ed. 2024' : 'Homebrew';
+        var badgeLabel = editionLabelText(ed, true);
         var t = frontTheme;
         var spineColor = schoolColor(s.school)[0];
 
@@ -3005,11 +3047,11 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         cardInner += '<div style="background:' + t.headerBg + ';margin:-6px -6px 5px -9px;padding:5px 7px 5px 10px;border-radius:1px 2px 0 0;">';
         cardInner += '<span style="color:' + t.headerText + ';font-weight:bold;font-size:7.5pt;line-height:1.2;">' + escapeHtml(s.nameIta) + '</span>';
         cardInner += '<span style="display:inline-block;margin-left:4px;background:' + levelColor(s.level) + ';color:white;font-size:5.5pt;padding:1px 4px;border-radius:3px;vertical-align:middle;font-weight:bold;">' + (s.level == 0 ? 'T' : s.level) + '</span>';
-        cardInner += '<span style="display:inline-block;margin-left:3px;background:' + badgeColor + ';color:white;font-size:5.5pt;padding:1px 3px;border-radius:3px;vertical-align:middle;">' + badgeLabel + '</span>';
+        if (cardEdition.besideName) cardInner += '<span style="display:inline-block;margin-left:3px;background:' + badgeColor + ';color:white;font-size:5.5pt;padding:1px 3px;border-radius:3px;vertical-align:middle;">' + badgeLabel + '</span>';
         cardInner += '</div>';
         if (s.nameEng) cardInner += '<div style="font-style:italic;font-size:6pt;opacity:.65;margin-bottom:3px;">' + escapeHtml(s.nameEng) + '</div>';
         cardInner += '<div style="font-size:6pt;line-height:1.5;margin-bottom:4px;">';
-        cardInner += '<b>' + escapeHtml(lvl) + ' ' + escapeHtml(s.school) + '</b>' + (s.ritual ? ' ®' : '') + (s.conc ? ' ©' : '') + ' &middot; ' + editionText + '<br>';
+        cardInner += '<b>' + escapeHtml(lvl) + ' ' + escapeHtml(s.school) + '</b>' + (s.ritual ? ' ®' : '') + (s.conc ? ' ©' : '') + '<br>';
         cardInner += '<b>Lancio:</b> ' + escapeHtml(s.cast || '—') + '<br>';
         cardInner += '<b>Gittata:</b> ' + escapeHtml(s.range || '—') + ' &nbsp; <b>Durata:</b> ' + escapeHtml(dur) + '<br>';
         cardInner += '<b>Comp.:</b> ' + escapeHtml(compsStr);
