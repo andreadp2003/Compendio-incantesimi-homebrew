@@ -801,7 +801,9 @@ footer.footer-noemi {
 <div class="modal-overlay" id="pdfModal" onclick="if(event.target===this) closePdfModal()">
   <div class="modal">
     <h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px; margin-right:5px;"><path d="M6 9V2h12v7"/><rect x="6" y="14" width="12" height="8"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/></svg>Stampa carte incantesimo</h2>
-    <p class="modal-sub">Seleziona gli incantesimi da stampare. Le carte vengono generate in formato poker (63×88mm), 9 per foglio A4.</p>
+    <p class="modal-sub">Seleziona gli incantesimi da stampare e scegli il formato delle carte.</p>
+    <div class="chip-row" id="printFormatRow"></div>
+    <p class="field-hint" id="printFormatHint"></p>
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <span id="pdfSelCount" style="font-family:var(--font-ui); font-size:.82em; color:var(--ink-muted);">0 selezionati</span>
       <div class="pdf-sel-links">
@@ -1043,6 +1045,17 @@ footer.footer-noemi {
           <label class="field-label" style="margin-top:14px; display:block;">Edizione sul fronte</label>
           <div class="chip-row" id="editionNameRow"></div>
 
+          <label class="field-label" style="margin-top:14px; display:block;">Adattamento del testo</label>
+          <div class="chip-row" id="cardTextAutoRow"></div>
+
+          <label class="field-label" style="margin-top:14px; display:block;">Dimensione del testo sul fronte: <span id="frontFontScaleValue">100%</span></label>
+          <div class="zoom-row">
+            <span style="font-family:var(--font-ui); font-size:.7rem;">A</span>
+            <input type="range" id="frontFontScaleInput" min="60" max="130" step="5" value="100" oninput="onFrontFontScaleChange(this.value)">
+            <span style="font-family:var(--font-ui); font-size:1rem;">A</span>
+          </div>
+          <p class="field-hint">Con l'adattamento attivo ogni carta riduce da sola il testo (fino al 60%) solo se la descrizione non ci sta, e lo slider indica la dimensione massima. Spento, tutte le carte usano la dimensione dello slider. Vale per effetto e livelli superiori. L'anteprima è solo un esempio: controlla il risultato reale dalla finestra di stampa.</p>
+
           <p style="font-family:var(--font-ui); font-size:.74rem; color:var(--ink-muted); margin-top:14px; line-height:1.5;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:3px;"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>Questo stile viene applicato alle carte generate in fase di stampa. La striscia laterale colorata resta legata alla scuola di magia per restare leggibile a colpo d'occhio.
           </p>
@@ -1217,6 +1230,44 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         return short ? 'HB' : 'Homebrew';
     }
 
+    // Dimensione del testo sul fronte della carta, in percentuale (100 = come prima).
+    // Vale per effetto e livelli superiori: sono le parti che si tagliano con i testi lunghi.
+    // Intestazione e riga con gittata/durata/componenti restano alla dimensione fissa.
+    const CARD_TEXT_MIN = 60, CARD_TEXT_MAX = 130;
+    function clampCardTextScale(v) {
+        v = Number(v);
+        if (!isFinite(v) || v <= 0) return 100;
+        return Math.min(CARD_TEXT_MAX, Math.max(CARD_TEXT_MIN, Math.round(v)));
+    }
+    // auto: ogni carta riduce da sola il testo, solo se serve per farlo entrare (mai sotto il minimo);
+    // in quel caso lo slider indica la dimensione massima. Spento, tutte le carte usano lo slider.
+    let cardText = Object.assign({ scale: 100, auto: true }, JSON.parse(localStorage.getItem('grim_card_text') || 'null') || {});
+    cardText.scale = clampCardTextScale(cardText.scale);
+    cardText.auto = cardText.auto !== false;
+    // Dimensione base (in pt) -> dimensione scalata, come stringa CSS. Senza "scale" usa lo slider.
+    function cardPt(pt, scale) {
+        if (scale == null) scale = cardText.scale;
+        return (pt * scale / 100).toFixed(2) + 'pt';
+    }
+    // Formati di stampa: dimensione della carta (mm) e griglia sul foglio A4 (margini 7 mm, spazio 3 mm).
+    // Poker: 3x3 carte da 63x88 mm. Grande: 2x2 carte da 95x133 mm (stesso rapporto, 1,5 volte più grande).
+    // Il testo del fronte resta della stessa dimensione, quindi nelle carte grandi ne entra molto di più.
+    const PRINT_FORMATS = {
+        poker:  { label: 'Poker',  w: 63, h: 88,  cols: 3, rows: 3 },
+        grande: { label: 'Grande', w: 95, h: 133, cols: 2, rows: 2 }
+    };
+    let printFormat = localStorage.getItem('grim_print_format');
+    if (!PRINT_FORMATS[printFormat]) printFormat = 'poker';
+    function currentPrintFormat() { return PRINT_FORMATS[printFormat]; }
+    // CSS delle carte nella finestra di stampa. Lo usa anche la misura dell'adattamento automatico,
+    // così il testo viene misurato con lo stesso layout con cui verrà stampato.
+    function printCardCss() {
+        var f = currentPrintFormat();
+        return 'html,body{margin:0; padding:0;}' +
+            'body{font-family:Palatino,serif;}' +
+            '.grid{display:grid; grid-template-columns:repeat(' + f.cols + ', ' + f.w + 'mm); grid-auto-rows:' + f.h + 'mm; gap:3mm; width:max-content;}';
+    }
+
     const COLOR_PRESETS = [
       { name: 'Violetto Arcano', a: '#6B4FA0', b: '#2C1D4A' },
       { name: 'Notte Stellata', a: '#242047', b: '#0c0a18' },
@@ -1349,13 +1400,13 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         });
     }
 
-    function toast(msg, icon) {
+    function toast(msg, icon, ms) {
       const c = document.getElementById('toastContainer');
       const el = document.createElement('div');
       el.className = 'toast';
       el.innerHTML = `<span>${icon||'✓'}</span><span>${msg}</span>`;
       c.appendChild(el);
-      setTimeout(() => { el.style.opacity = '0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(), 300); }, 2600);
+      setTimeout(() => { el.style.opacity = '0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(), 300); }, ms || 2600);
     }
 
     function toggleTheme() {
@@ -2486,6 +2537,7 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         syncFrontControlsFromState();
         renderFrontPreview();
         renderEditionControls();
+        syncFontScaleControl();
         document.getElementById('perSpellBackToggle').checked = !!backDesign.perSpell;
         document.getElementById('genericBackDesignerWrap').classList.toggle('hidden', !!backDesign.perSpell);
         document.getElementById('perSpellPreviewControls').classList.toggle('hidden', !backDesign.perSpell);
@@ -2541,6 +2593,25 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
     function toggleEditionBesideName() {
         cardEdition.besideName = !cardEdition.besideName;
         renderEditionControls();
+        renderFrontPreview();
+    }
+
+    // Controllo della dimensione del testo sul fronte (slider in Stile carte).
+    function syncFontScaleControl() {
+        var inp = document.getElementById('frontFontScaleInput');
+        var out = document.getElementById('frontFontScaleValue');
+        if (inp) inp.value = cardText.scale;
+        if (out) out.textContent = cardText.scale + '% (' + cardPt(6) + ')' + (cardText.auto ? ' · massima' : '');
+        var row = document.getElementById('cardTextAutoRow');
+        if (row) row.innerHTML = '<div class="chip' + (cardText.auto ? ' selected' : '') + '" onclick="toggleCardTextAuto()">Adatta il testo alla carta</div>';
+    }
+    function toggleCardTextAuto() {
+        cardText.auto = !cardText.auto;
+        syncFontScaleControl();
+    }
+    function onFrontFontScaleChange(v) {
+        cardText.scale = clampCardTextScale(v);
+        syncFontScaleControl();
         renderFrontPreview();
     }
 
@@ -2895,7 +2966,7 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
                     Palla di Fuoco ${cardEdition.besideName ? `<span style="background:#8b4513; color:#fff; font-size:.6rem; padding:1px 6px; border-radius:8px; margin-left:5px;">${editionLabelText('2014', true)}</span>` : ''}
                 </div>
                 <div style="font-size:.72rem; line-height:1.6; margin-bottom:6px;"><b>3° Livello Invocazione</b><br><b>Lancio:</b> 1 azione &nbsp; <b>Durata:</b> Istantanea</div>
-                <div style="border-top:1px solid rgba(0,0,0,.15); padding-top:6px; font-size:.76rem; line-height:1.4; flex:1;">Una scia di luce sfreccia dall'indice dell'incantatore fino a un punto scelto, provocando un'esplosione...</div>
+                <div style="border-top:1px solid rgba(0,0,0,.15); padding-top:6px; font-size:${(0.76 * cardText.scale / 100).toFixed(3)}rem; line-height:1.4; flex:1;">Una scia di luce sfreccia dall'indice dell'incantatore fino a un punto scelto, provocando un'esplosione...</div>
             </div>`;
     }
 
@@ -2910,6 +2981,7 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         localStorage.setItem('grim_card_back', JSON.stringify(backDesign));
         localStorage.setItem('grim_front_theme', JSON.stringify(frontTheme));
         localStorage.setItem('grim_card_edition', JSON.stringify(cardEdition));
+        localStorage.setItem('grim_card_text', JSON.stringify(cardText));
         toast('Stile delle carte salvato', '🎨');
         closeBackModal();
     }
@@ -2939,12 +3011,33 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
     // ============================================================
     function openPdfModal() {
         renderPdfSpellList();
+        renderPrintFormatControls();
         document.getElementById('printOffsetX').value = printOffset.x;
         document.getElementById('printOffsetY').value = printOffset.y;
         var backOn = document.getElementById('includeBackToggle').checked;
         document.getElementById('duplexHint').classList.toggle('hidden', !backOn);
         document.getElementById('fineAdjustBox').classList.toggle('hidden', !backOn);
         document.getElementById('pdfModal').classList.add('open');
+    }
+    // Scelta del formato di stampa (preset di PRINT_FORMATS), ricordata tra una visita e l'altra.
+    function renderPrintFormatControls() {
+        var row = document.getElementById('printFormatRow');
+        var hint = document.getElementById('printFormatHint');
+        if (row) row.innerHTML = Object.keys(PRINT_FORMATS).map(function (id) {
+            var f = PRINT_FORMATS[id];
+            return '<div class="chip' + (id === printFormat ? ' selected' : '') + '" onclick="setPrintFormat(\'' + id + '\')">' + f.label + ' · ' + (f.cols * f.rows) + ' per foglio</div>';
+        }).join('');
+        if (hint) {
+            var f = currentPrintFormat();
+            hint.textContent = f.w + '×' + f.h + ' mm, ' + (f.cols * f.rows) + ' per foglio A4 (' + f.cols + '×' + f.rows + ').' +
+                (printFormat === 'poker' ? '' : ' Il testo del fronte resta della stessa dimensione, quindi ne entra di più. Il retro viene ingrandito in proporzione; le immagini restano agli stessi pixel, quindi risultano meno nitide (circa 200 dpi invece di 300).');
+        }
+    }
+    function setPrintFormat(id) {
+        if (!PRINT_FORMATS[id]) return;
+        printFormat = id;
+        localStorage.setItem('grim_print_format', id);
+        renderPrintFormatControls();
     }
     // Re-renders the print spell list in the chosen order, preserving whatever was
     // already checked (so switching sort order doesn't lose the current selection).
@@ -3020,7 +3113,8 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         return 'rgb(168,124,37)';
     }
 
-    function buildFrontCardHtml(s) {
+    // scale (opzionale): dimensione del testo di questa carta in %; senza, vale lo slider.
+    function buildFrontCardHtml(s, scale) {
         var comps = [];
         if (s.comp.v) comps.push('V');
         if (s.comp.s) comps.push('S');
@@ -3056,15 +3150,82 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         if (s.classes && s.classes.length) cardInner += '<br><b>Classi:</b> ' + escapeHtml(s.classes.join(', '));
         cardInner += '</div>';
         cardInner += '<div style="border-top:1px solid ' + t.headerBg + ';opacity:.4;margin-bottom:4px;"></div>';
-        cardInner += '<div style="font-size:6pt;line-height:1.45;overflow:hidden;flex:1;">' + escapeHtmlMultiline(s.effect || '') + '</div>';
-        if (s.higher) cardInner += '<div style="font-size:5.5pt;font-style:italic;opacity:.82;margin-top:3px;border-top:1px solid ' + t.headerBg + ';padding-top:2px;"><b>Liv. Sup.:</b> ' + escapeHtmlMultiline(s.higher) + '</div>';
+        cardInner += '<div data-card-effect style="font-size:' + cardPt(6, scale) + ';line-height:1.45;overflow:hidden;flex:1;">' + escapeHtmlMultiline(s.effect || '') + '</div>';
+        if (s.higher) cardInner += '<div data-card-higher style="font-size:' + cardPt(5.5, scale) + ';font-style:italic;opacity:.82;margin-top:3px;border-top:1px solid ' + t.headerBg + ';padding-top:2px;"><b>Liv. Sup.:</b> ' + escapeHtmlMultiline(s.higher) + '</div>';
 
-        return '<div style="width:63mm;height:88mm;box-sizing:border-box;padding:6px 6px 6px 9px;background:' + t.bg + ';color:' + t.text + ';border:0.5mm solid ' + t.headerBg + ';border-left:6px solid ' + spineColor + ';border-radius:3px;font-family:Palatino,Georgia,serif;overflow:hidden;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid;">' + cardInner + '</div>';
+        return '<div style="width:' + currentPrintFormat().w + 'mm;height:' + currentPrintFormat().h + 'mm;box-sizing:border-box;padding:6px 6px 6px 9px;background:' + t.bg + ';color:' + t.text + ';border:0.5mm solid ' + t.headerBg + ';border-left:6px solid ' + spineColor + ';border-radius:3px;font-family:Palatino,Georgia,serif;overflow:hidden;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid;">' + cardInner + '</div>';
+    }
+
+    // Adattamento automatico del testo. Per ogni incantesimo cerca la dimensione più grande
+    // (non oltre maxScale, non sotto CARD_TEXT_MIN) con cui effetto e livelli superiori stanno
+    // nella carta. Misura in un iframe con lo stesso CSS della finestra di stampa.
+    // Ritorna, per ogni incantesimo, { scale, fits }: fits=false se non ci sta nemmeno al minimo.
+    function fitFrontCardScales(list, maxScale) {
+        var fr = document.createElement('iframe');
+        fr.setAttribute('aria-hidden', 'true');
+        fr.style.cssText = 'position:fixed;left:-10000px;top:0;width:260mm;height:300mm;border:0;visibility:hidden;';
+        document.body.appendChild(fr);
+        var out = [];
+        try {
+            var d = fr.contentDocument;
+            d.open();
+            d.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' + printCardCss() + '</style></head><body><div class="grid"></div></body></html>');
+            d.close();
+            var grid = d.querySelector('.grid');
+            list.forEach(function (sp) {
+                grid.innerHTML = buildFrontCardHtml(sp, maxScale);
+                var eff = grid.querySelector('[data-card-effect]');
+                var hi = grid.querySelector('[data-card-higher]');
+                if (!eff) { out.push({ scale: maxScale, fits: true }); return; }
+                function apply(sc) { eff.style.fontSize = cardPt(6, sc); if (hi) hi.style.fontSize = cardPt(5.5, sc); }
+                function fits() { return eff.scrollHeight <= eff.clientHeight; }
+                apply(maxScale);
+                if (fits()) { out.push({ scale: maxScale, fits: true }); return; }
+                apply(CARD_TEXT_MIN);
+                if (!fits()) { out.push({ scale: CARD_TEXT_MIN, fits: false }); return; }
+                // lo = dimensione che ci sta, hiS = dimensione che non ci sta: ricerca binaria
+                var lo = CARD_TEXT_MIN, hiS = maxScale;
+                for (var i = 0; i < 8; i++) {
+                    var mid = (lo + hiS) / 2;
+                    apply(mid);
+                    if (fits()) lo = mid; else hiS = mid;
+                }
+                // Un piccolo margine (2%) per le differenze di arrotondamento tra schermo e stampa
+                var best = Math.max(CARD_TEXT_MIN, Math.floor(lo * 0.98 * 10) / 10);
+                apply(best);
+                while (!fits() && best > CARD_TEXT_MIN) { best = Math.max(CARD_TEXT_MIN, best - 0.5); apply(best); }
+                out.push({ scale: best, fits: true });
+            });
+        } finally {
+            fr.remove();
+        }
+        return out;
+    }
+
+    // Il retro è disegnato in formato poker (63 mm di larghezza). Nei formati più grandi viene ingrandito
+    // in blocco (transform), così resta identico al disegno in anteprima. vh è l'altezza "virtuale" del
+    // disegno, scelta in modo che dopo l'ingrandimento riempia esattamente la carta.
+    function backFormatDims() {
+        var f = currentPrintFormat();
+        var k = f.w / 63;
+        return { w: f.w, h: f.h, k: k, vw: 63, vh: Math.round(f.h / k * 1000) / 1000 };
+    }
+    function scaleBackCardForFormat(cardHtml) {
+        var b = backFormatDims();
+        if (b.k === 1) return cardHtml;
+        return '<div style="width:' + b.w + 'mm;height:' + b.h + 'mm;overflow:hidden;position:relative;page-break-inside:avoid;break-inside:avoid;">' +
+            '<div style="width:' + b.vw + 'mm;height:' + b.vh + 'mm;transform:scale(' + b.k.toFixed(5) + ');transform-origin:0 0;">' + cardHtml + '</div></div>';
+    }
+    // Cella vuota (invisibile) che occupa il posto di una carta nelle righe parziali del retro.
+    function backSpacerHtml() {
+        var f = currentPrintFormat();
+        return '<div style="width:' + f.w + 'mm;height:' + f.h + 'mm;visibility:hidden;"></div>';
     }
 
     function buildBackCardHtml() {
         var d = getBackDesignFragmentStyle();
-        return '<div style="width:63mm;height:88mm;box-sizing:border-box;position:relative;border:0.5mm solid #bc9a70;border-radius:3px;overflow:hidden;page-break-inside:avoid;break-inside:avoid;' + d.style + '">' + d.inner + '</div>';
+        var bd = backFormatDims();
+        return scaleBackCardForFormat('<div style="width:' + bd.vw + 'mm;height:' + bd.vh + 'mm;box-sizing:border-box;position:relative;border:0.5mm solid #bc9a70;border-radius:3px;overflow:hidden;page-break-inside:avoid;break-inside:avoid;' + d.style + '">' + d.inner + '</div>');
     }
 
     // Alternate back layout: image + name + a 3-row stat table (livello/tipo azione,
@@ -3101,11 +3262,12 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
             imgHtml = '<div style="width:100%;flex:1;min-height:0;background:#2b2018;"></div>';
         }
         var rowsHtml = buildBackStatRowsHtml(s, '6pt', '1.5mm 3mm');
-        return '<div style="width:63mm;height:88mm;box-sizing:border-box;position:relative;border:0.5mm solid #bc9a70;border-radius:3px;overflow:hidden;background:#f2ede1;color:#2b2018;font-family:Palatino,Georgia,serif;page-break-inside:avoid;break-inside:avoid;display:flex;flex-direction:column;">' +
+        var bd = backFormatDims();
+        return scaleBackCardForFormat('<div style="width:' + bd.vw + 'mm;height:' + bd.vh + 'mm;box-sizing:border-box;position:relative;border:0.5mm solid #bc9a70;border-radius:3px;overflow:hidden;background:#f2ede1;color:#2b2018;font-family:Palatino,Georgia,serif;page-break-inside:avoid;break-inside:avoid;display:flex;flex-direction:column;">' +
             imgHtml +
             '<div style="background:#3a2a24;color:#f2ede1;text-align:center;font-weight:bold;font-size:8pt;padding:2mm;text-transform:uppercase;letter-spacing:.03em;flex-shrink:0;">' + escapeHtml(s.nameIta || '') + '</div>' +
             '<div style="background:#3a2a24;color:#f2ede1;flex-shrink:0;">' + rowsHtml + '</div>' +
-        '</div>';
+        '</div>');
     }
 
     // A sheet flipped on its long edge mirrors LEFT-RIGHT. So if a front row only fills
@@ -3114,13 +3276,13 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
     // rows always fill left-to-right on the front, we mirror that here with invisible
     // spacer cells pushed to the LEFT of each back row, shifting the real cards right.
     function buildBackPageHtml(count) {
-        var COLS = 3;
+        var COLS = currentPrintFormat().cols;
         var html = '';
         var i = 0;
         while (i < count) {
             var rowCount = Math.min(COLS, count - i);
             var spacers = COLS - rowCount;
-            for (var sp = 0; sp < spacers; sp++) html += '<div style="width:63mm;height:88mm;visibility:hidden;"></div>';
+            for (var sp = 0; sp < spacers; sp++) html += backSpacerHtml();
             for (var c = 0; c < rowCount; c++) html += buildBackCardHtml();
             i += rowCount;
         }
@@ -3132,14 +3294,14 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
     // left-right too: within each row of up to 3 cards, the actual spell order must be
     // reversed (not just shifted) so each back lands squarely behind its own front.
     function buildBackPageHtmlPerSpell(pageSpells) {
-        var COLS = 3;
+        var COLS = currentPrintFormat().cols;
         var html = '';
         var i = 0;
         while (i < pageSpells.length) {
             var rowSpells = pageSpells.slice(i, i + COLS);
             var spacers = COLS - rowSpells.length;
             var reversed = rowSpells.slice().reverse();
-            for (var sp = 0; sp < spacers; sp++) html += '<div style="width:63mm;height:88mm;visibility:hidden;"></div>';
+            for (var sp = 0; sp < spacers; sp++) html += backSpacerHtml();
             for (var c = 0; c < reversed.length; c++) html += buildBackCardHtmlForSpell(reversed[c]);
             i += rowSpells.length;
         }
@@ -3162,18 +3324,26 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
             if (s) matched.push(s);
         }
 
-        // 3 columns x 3 rows of 63x88mm cards fit one A4 sheet with 8mm margins.
+        // Il formato scelto (PRINT_FORMATS) decide dimensione, colonne e righe: il poker 63x88mm
+        // sta 3x3 su un foglio A4, il formato Grande 95x133mm sta 2x2.
         // Every sheet is built as a FRONT page immediately followed by its matching
         // BACK page with the exact same card count, so page 1+2 = sheet 1, page 3+4 =
         // sheet 2, etc. This is what makes automatic duplex printing (or manually
         // flipping the same stack of paper) line up the back with the right front,
         // no matter how many cards are in the deck -- not just for a single sheet.
-        var CARDS_PER_PAGE = 9;
+        // Adattamento automatico: dimensione del testo di ogni carta (vedi fitFrontCardScales).
+        var fitInfo = cardText.auto ? fitFrontCardScales(matched, cardText.scale) : null;
+        var unfitNames = [];
+        var CARDS_PER_PAGE = currentPrintFormat().cols * currentPrintFormat().rows;
         var pages = [];
         for (var start = 0; start < matched.length; start += CARDS_PER_PAGE) {
             var chunk = matched.slice(start, start + CARDS_PER_PAGE);
             var frontHtml = '';
-            for (var c = 0; c < chunk.length; c++) frontHtml += buildFrontCardHtml(chunk[c]);
+            for (var c = 0; c < chunk.length; c++) {
+                var fi = fitInfo ? fitInfo[start + c] : null;
+                if (fi && !fi.fits) unfitNames.push(chunk[c].nameIta);
+                frontHtml += buildFrontCardHtml(chunk[c], fi ? fi.scale : undefined);
+            }
             pages.push({ html: frontHtml, isBack: false });
             if (includeBack) {
                 pages.push({ html: backDesign.perSpell ? buildBackPageHtmlPerSpell(chunk) : buildBackPageHtml(chunk.length), isBack: true });
@@ -3190,11 +3360,10 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         // duplex feed has its own small, consistent registration drift.
         var pageStyle = [
             '@page{margin:0; size:A4 portrait;}',
-            'html,body{margin:0; padding:0;}',
-            'body{background:#eee; font-family:Palatino,serif;}',
+            printCardCss(),
+            'body{background:#eee;}',
             '.sheet-page{width:210mm; height:297mm; box-sizing:border-box; padding:7mm; display:flex; align-items:center; justify-content:center;}',
             '.sheet-page.brk{page-break-after:always; break-after:page;}',
-            '.grid{display:grid; grid-template-columns:repeat(3, 63mm); grid-auto-rows:88mm; gap:3mm; width:max-content;}',
             '@media print{ body{background:white;} *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;} }'
         ].join('');
 
@@ -3211,6 +3380,12 @@ const SRD_SPELLS = [{"id":"srd_aiuto_2014","nome":"Aiuto","livello":2,"edizione"
         win.document.close();
         win.focus();
         setTimeout(function () { win.print(); }, 400);
+        if (unfitNames.length) {
+            toast('Anche alla dimensione minima il testo è troppo lungo per ' + unfitNames.length +
+                (unfitNames.length === 1 ? ' carta: ' : ' carte: ') +
+                unfitNames.slice(0, 3).map(escapeHtml).join(', ') +
+                (unfitNames.length > 3 ? ' e altre ' + (unfitNames.length - 3) : '') + '.', '⚠️', 8000);
+        }
         closePdfModal();
     }
 
